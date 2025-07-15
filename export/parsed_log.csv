@@ -1,0 +1,13 @@
+Time,Direction,Message,Delay
+12:00:01,RX,System started successfully,0.0
+12:00:02,TX,Initialization command sent,1.0
+12:00:05,RX,Warning: Voltage level is low,3.0
+12:00:07,TX,Sending data packet #1,2.0
+12:00:10,RX,Error: Checksum mismatch detected,3.0
+12:00:12,TX,Resend packet #1,2.0
+12:00:15,RX,Data packet #1 received correctly,3.0
+12:00:18,TX,Sending data packet #2,3.0
+12:00:20,RX,Warning: Temperature approaching limit,2.0
+12:00:22,TX,Sending reset command,2.0
+12:00:25,RX,Error: Device not responding,3.0
+12:00:30,TX,Attempting reconnection,5.0

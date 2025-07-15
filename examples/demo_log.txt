@@ -1,0 +1,12 @@
+12:00:01 RX: System started successfully
+12:00:02 TX: Initialization command sent
+12:00:05 RX: Warning: Voltage level is low
+12:00:07 TX: Sending data packet #1
+12:00:10 RX: Error: Checksum mismatch detected
+12:00:12 TX: Resend packet #1
+12:00:15 RX: Data packet #1 received correctly
+12:00:18 TX: Sending data packet #2
+12:00:20 RX: Warning: Temperature approaching limit
+12:00:22 TX: Sending reset command
+12:00:25 RX: Error: Device not responding
+12:00:30 TX: Attempting reconnection
