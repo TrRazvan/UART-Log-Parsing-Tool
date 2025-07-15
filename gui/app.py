@@ -2,54 +2,82 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 from tkinter import ttk
 import pandas as pd
+import os
 
 def launch_app(parse_func, live_func):
     def load_file():
         path = filedialog.askopenfilename()
         if not path:
+            messagebox.showwarning("No File", "No file selected.")
             return
-        df = parse_func(path)
-        display_df(df)
+
+        try:
+            df = parse_func(path)
+            if df.empty:
+                messagebox.showwarning("Empty File", "The parsed file is empty.")
+                return
+            display_df(df)
+        except Exception as e:
+            messagebox.showerror("Parsing Error", f"Failed to parse file:\n{str(e)}")
 
     def live_read():
         try:
             port = port_var.get()
             baudrate = int(baud_var.get())
             duration = int(duration_var.get())
+            if not port:
+                messagebox.showwarning("Missing Port", "Please enter a COM port.")
+                return
         except ValueError:
-            messagebox.showerror("Input Error", "Baudrate and duration must be numbers")
+            messagebox.showerror("Input Error", "Baudrate and duration must be numbers.")
             return
-        
-        df = live_func(port=port, baudrate=baudrate, duration=duration)
-        display_df(df)
+
+        try:
+            df = live_func(port=port, baudrate=baudrate, duration=duration)
+            if df.empty:
+                messagebox.showwarning("Empty Capture", "No data received from UART.")
+                return
+            display_df(df)
+        except Exception as e:
+            messagebox.showerror("Live Read Error", f"Could not read from UART:\n{str(e)}")
 
     def display_df(df):
         nonlocal current_df
         current_df = df.copy()
-        df.to_csv("export/parsed_log.csv", index=False)
+
+        try:
+            os.makedirs("export", exist_ok=True)
+            df.to_csv("export/parsed_log.csv", index=False)
+        except Exception as e:
+            messagebox.showwarning("Export Failed", f"Could not save CSV:\n{str(e)}")
+
+        if not tree["columns"]:
+            setup_columns(list(df.columns))
         update_table()
 
     def sort_column(col):
         nonlocal current_df, sort_reverse
+        if col not in current_df.columns:
+            messagebox.showwarning("Invalid Column", f"Column '{col}' not found in data.")
+            return
         sort_reverse = not sort_reverse
         current_df = current_df.sort_values(by=col, ascending=not sort_reverse)
         update_table()
 
     def update_table():
-        # Delete all the rows
-        for row in tree.get_children():
-            tree.delete(row)
-
-        # Insert the new data
-        for _, row in current_df.iterrows():
-            msg = str(row.get("Message", "")).upper()
-            if "ERROR" in msg or "ERR" in msg:
-                tag = 'error'
-            elif "WARN" in msg or "WARNING" in msg:
-                tag = 'warning'
-            else:
-                tag = ''
-            tree.insert("", "end", values=list(row), tags=(tag,))
+        try:
+            tree.delete(*tree.get_children())
+            for _, row in current_df.iterrows():
+                msg = str(row.get("Message", "")).upper()
+                if "ERROR" in msg or "ERR" in msg:
+                    tag = 'error'
+                elif "WARN" in msg or "WARNING" in msg:
+                    tag = 'warning'
+                else:
+                    tag = ''
+                tree.insert("", "end", values=list(row), tags=(tag,))
+        except Exception as e:
+            messagebox.showerror("Table Error", f"Failed to update table:\n{str(e)}")
 
     root = tk.Tk()
     root.title("UART Log Debug Tool")
@@ -73,7 +101,6 @@ def launch_app(parse_func, live_func):
     tk.Button(root, text="Parse Log File", command=load_file).pack(padx=20, pady=10)
     tk.Button(root, text="Live UART Capture", command=live_read).pack(padx=20, pady=10)
 
-    # The table in principal windows
     tree = ttk.Treeview(root)
     tree.pack(fill="both", expand=True)
 
@@ -84,11 +111,9 @@ def launch_app(parse_func, live_func):
     current_df = pd.DataFrame()
     sort_reverse = False
 
-    # Sort column on heading click
     def on_heading_click(col):
         return lambda: sort_column(col)
 
-    # Set columns when data exists initially
     def setup_columns(cols):
         tree["columns"] = cols
         tree["show"] = "headings"
@@ -98,16 +123,5 @@ def launch_app(parse_func, live_func):
 
         tree.tag_configure('error', background='red')
         tree.tag_configure('warning', background='yellow')
-
-    # First display of the table
-    def display_df(df):
-        nonlocal current_df
-        current_df = df.copy()
-        df.to_csv("export/parsed_log.csv", index=False)
-
-        if not tree["columns"]:
-            setup_columns(list(df.columns))
-
-        update_table()
 
     root.mainloop()
