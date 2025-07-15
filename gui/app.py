@@ -35,11 +35,11 @@ def launch_app(parse_func, live_func):
         try:
             df = live_func(port=port, baudrate=baudrate, duration=duration)
             if df.empty:
-                messagebox.showwarning("Empty Capture", "No data received from UART.")
+                messagebox.showwarning("Empty Capture", "No data was captured from the port.")
                 return
             display_df(df)
         except Exception as e:
-            messagebox.showerror("Live Read Error", f"Could not read from UART:\n{str(e)}")
+            messagebox.showerror("Live Read Error", f"Failed to read live UART:\n{str(e)}")
 
     def display_df(df):
         nonlocal current_df
@@ -53,6 +53,7 @@ def launch_app(parse_func, live_func):
 
         if not tree["columns"]:
             setup_columns(list(df.columns))
+
         update_table()
 
     def sort_column(col):
@@ -65,26 +66,64 @@ def launch_app(parse_func, live_func):
         update_table()
 
     def update_table():
-        try:
-            tree.delete(*tree.get_children())
-            for _, row in current_df.iterrows():
-                msg = str(row.get("Message", "")).upper()
-                if "ERROR" in msg or "ERR" in msg:
-                    tag = 'error'
-                elif "WARN" in msg or "WARNING" in msg:
-                    tag = 'warning'
-                else:
-                    tag = ''
-                tree.insert("", "end", values=list(row), tags=(tag,))
-        except Exception as e:
-            messagebox.showerror("Table Error", f"Failed to update table:\n{str(e)}")
+        for row in tree.get_children():
+            tree.delete(row)
 
+        for _, row in current_df.iterrows():
+            msg = str(row.get("Message", "")).upper()
+
+            # Apply filter logic
+            show = True
+            if filter_mode.get() == "Error" and not is_error(msg):
+                show = False
+            elif filter_mode.get() == "Warning" and not is_warning(msg):
+                show = False
+
+            if not show:
+                continue
+
+            # Tag styling
+            if is_error(msg):
+                tag = 'error'
+            elif is_warning(msg):
+                tag = 'warning'
+            else:
+                tag = ''
+            tree.insert("", "end", values=list(row), tags=(tag,))
+
+    def is_error(msg):
+        keywords = ["ERROR", "ERR", "FAIL", "EXCEPTION", "CRITICAL"]
+        return any(kw in msg for kw in keywords)
+
+    def is_warning(msg):
+        keywords = ["WARN", "WARNING", "CAUTION", "ATTENTION"]
+        return any(kw in msg for kw in keywords)
+
+    def on_heading_click(col):
+        return lambda: sort_column(col)
+
+    def setup_columns(cols):
+        tree["columns"] = cols
+        tree["show"] = "headings"
+        for col in cols:
+            tree.heading(col, text=col, command=on_heading_click(col))
+            tree.column(col, width=120)
+
+        tree.tag_configure('error', background='tomato')
+        tree.tag_configure('warning', background='khaki')
+
+    def set_filter(mode):
+        filter_mode.set(mode)
+        update_table()
+
+    # === GUI setup ===
     root = tk.Tk()
     root.title("UART Log Debug Tool")
 
     port_var = tk.StringVar(value="COM3")
     baud_var = tk.StringVar(value="9600")
     duration_var = tk.StringVar(value="10")
+    filter_mode = tk.StringVar(value="All")
 
     frm_params = tk.Frame(root)
     frm_params.pack(padx=10, pady=5)
@@ -98,9 +137,20 @@ def launch_app(parse_func, live_func):
     tk.Label(frm_params, text="Duration (s):").grid(row=0, column=4, sticky="e")
     tk.Entry(frm_params, textvariable=duration_var, width=8).grid(row=0, column=5, padx=5)
 
-    tk.Button(root, text="Parse Log File", command=load_file).pack(padx=20, pady=10)
-    tk.Button(root, text="Live UART Capture", command=live_read).pack(padx=20, pady=10)
+    tk.Button(root, text="Parse Log File", command=load_file).pack(padx=20, pady=5)
+    tk.Button(root, text="Live UART Capture", command=live_read).pack(padx=20, pady=5)
 
+    # Filter buttons
+    frm_filters = tk.Frame(root)
+    frm_filters.pack(pady=5)
+
+    tk.Label(frm_filters, text="Filter:").pack(side="left")
+
+    tk.Button(frm_filters, text="All", command=lambda: set_filter("All")).pack(side="left", padx=5)
+    tk.Button(frm_filters, text="Errors", command=lambda: set_filter("Error")).pack(side="left", padx=5)
+    tk.Button(frm_filters, text="Warnings", command=lambda: set_filter("Warning")).pack(side="left", padx=5)
+
+    # Table view
     tree = ttk.Treeview(root)
     tree.pack(fill="both", expand=True)
 
